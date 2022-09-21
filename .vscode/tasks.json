@@ -295,6 +295,34 @@
                     }
                 }
             }
-        }
+        },
+        {
+            "label": "Encrypted Flash",
+            "type": "shell",
+            "icon": {
+                "id": "lock"
+            },
+            "command": "${config:idf.pythonBinPath} ${config:idf.espIdfPath}/tools/idf.py build encrypted-flash",
+            "windows": {
+                "command": "${config:idf.pythonBinPathWin} ${config:idf.espIdfPathWin}\\tools\\idf.py build encrypted-flash",
+                "options": {
+                    "env": {
+                        "PATH": "${env:PATH};${config:idf.customExtraPaths}"
+                    }
+                }
+            },
+            "dependsOrder": "sequence",
+            "runOptions": {
+                "instanceLimit": 1
+            },
+            "options": {
+                "env": {
+                    "PATH": "${env:PATH}:${config:idf.customExtraPaths}"
+                }
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
     ]
 }
