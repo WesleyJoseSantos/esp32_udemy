@@ -5,9 +5,8 @@
             "cStandard": "c11",
             "cppStandard": "c++17",
             "forcedInclude": [
-                "${HOME}/esp/esp-idf/components/mqtt/host_test/mocks/include/freertos/portmacro.h",
-                "${HOME}/esp/esp-idf/components/freertos/tasks.c",
-                "${HOME}/esp/esp-idf/components/freertos/**"
+                "c:/users/binar/esp/esp-idf/components/mqtt/host_test/mocks/include/freertos/portmacro.h",
+                "c:/users/binar/esp/esp-idf/components/freertos/tasks.c",
             ],
             "includePath": [
                 "${config:idf.espIdfPath}/components/**",
@@ -22,7 +21,8 @@
                 ],
                 "limitSymbolsToIncludedHeaders": false
             },
-            "compilerPath": "${HOME}/.espressif/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc"
+            // "compilerPath": "${HOME}/.espressif/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc"
+            "compilerPath": "c:/users/binar/.espressif/tools/xtensa-esp32-elf/esp-2021r2-patch3-8.4.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc"
         }
     ],
     "version": 4
