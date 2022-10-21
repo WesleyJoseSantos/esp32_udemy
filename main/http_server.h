@@ -24,7 +24,7 @@ typedef enum http_server_message
 
 typedef struct http_server_queue_message
 {
-    http_server_message_t msg_id;
+    http_server_message_t id;
 } http_server_queue_message_t;
 
 /**
