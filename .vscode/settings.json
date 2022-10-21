@@ -12,7 +12,8 @@
         "freertos.h": "c",
         "*.ipp": "c",
         "esp_wifi.h": "c",
-        "sockets.h": "c"
+        "sockets.h": "c",
+        "esp_log.h": "c"
     },
     "idf.portWin": "COM6",
     "idf.flashType": "UART"
