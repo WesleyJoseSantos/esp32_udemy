@@ -12,6 +12,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
+#include "esp_ota_ops.h"
+#include "sys/param.h"
 
 #include "esp_http_server.h"
 #include "esp_log.h"
@@ -21,6 +23,8 @@
 #include "wifi_app.h"
 
 static const char *TAG = "http_server";
+
+static int fw_update_status = OTA_UPDATE_PENDING;
 
 static httpd_handle_t http_server_handle = NULL;
 
@@ -67,22 +71,19 @@ static void http_server_monitor(void *pvParameters)
                 break;
             case HTTP_SERVER_MSG_OTA_UPDATE_SUCCESSFUL:
                 ESP_LOGI(TAG, "HTTP_SERVER_MSG_OTA_UPDATE_SUCCESSFUL");
+                fw_update_status = OTA_UPDATE_SUCCESSFUL;
                 /* code */
                 break;
             case HTTP_SERVER_MSG_OTA_UPDATE_FAILED:
                 ESP_LOGI(TAG, "HTTP_SERVER_MSG_OTA_UPDATE_FAILED");
-                /* code */
-                break;
-            case HTTP_SERVER_MSG_OTA_UPDATE_INITIALIZED:
-                ESP_LOGI(TAG, "HTTP_SERVER_MSG_OTA_UPDATE_INITIALIZED");
+                fw_update_status = OTA_UPDATE_FAIL;
                 /* code */
                 break;
             default:
                 break;
             }
         }
-    }
-    
+    }    
 }
 
 static httpd_handle_t http_server_configure(void)
@@ -145,6 +146,22 @@ static httpd_handle_t http_server_configure(void)
             .user_ctx = NULL
         };
         httpd_register_uri_handler(http_server_handle, &favicon_ico);
+
+        httpd_uri_t ota_update = {
+            .uri = "/ota_update",
+            .method = HTTP_POST,
+            .handler = http_server_ota_update_handler,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(http_server_handle, &ota_update);
+
+        httpd_uri_t ota_status = {
+            .uri = "/ota_status",
+            .method = HTTP_POST,
+            .handler = http_server_ota_status_handler,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(http_server_handle, &ota_status);
 
         return http_server_handle;
     }
@@ -217,3 +234,97 @@ static esp_err_t http_server_favicon_ico_handler(httpd_req_t *req)
     httpd_resp_send(req, (const char*) favicon_ico_start, favicon_ico_start - favicon_ico_end);
     return ESP_OK;
 }
+
+static esp_err_t http_server_ota_update_handler(httpd_req_t *req)
+{
+    esp_ota_handle_t ota_handle;
+    char ota_buf[1024];
+    int content_len = req->content_len;
+    int content_rec = 0;
+    int recv_len;
+    bool is_req_body_started = false;
+    bool flash_successful = false;
+
+    const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
+
+    do
+    {
+        if(recv_len = httpd_req_recv(req, ota_buf, MIN(content_len, sizeof(ota_buf))) < 0)
+        {
+            if(recv_len == HTTPD_SOCK_ERR_TIMEOUT)
+            {
+                ESP_LOGI(TAG, "http_server_ota_update_handler: Socket Timeout");
+                continue;   ///> Retry receiveing if timeout occourred
+            }
+            ESP_LOGI(TAG, "http_server_ota_update_handler: OTA other error: %d", recv_len);
+            return ESP_FAIL;
+        }
+        printf("http_server_ota_update_handler: OTA RX: %d, of %d\r", content_rec, content_len);
+
+        if(is_req_body_started == false)
+        {
+            is_req_body_started = true;
+            char *body_start_p = strstr(ota_buf, "\r\n\r\n") + strlen("\r\n\r\n");
+            int body_part_len = recv_len - (body_start_p - ota_buf);
+
+            printf("http_server_ota_update_handler: OTA file size: %d\r\n", content_len);
+
+            esp_err_t err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
+            if(err != ESP_OK)
+            {
+                printf("http_server_ota_update_handler: Error with OTA begin, cancelling OTA\r\n");
+                return ESP_FAIL;
+            }
+            else
+            {
+                printf("http_server_ota_update_handler: Writing to partition subtype %d at offser 0x%x\r\n", update_partition->subtype, update_partition->address);                
+            }
+
+            //Write first part of the data
+            esp_ota_write(ota_handle, body_start_p, body_part_len);
+        }
+        else
+        {
+            // Write OTA data
+            esp_ota_write(ota_handle, ota_buf, recv_len);
+            content_rec += recv_len;
+        }
+
+    } while (recv_len > 0 && content_rec < content_len);
+
+    if(esp_ota_end(ota_handle) == ESP_OK)
+    {
+        // Lets update the partition
+        if(esp_ota_set_boot_partition(update_partition) == ESP_OK)
+        {
+            const esp_partition_t *boot_partition = esp_ota_get_boot_partition();
+            ESP_LOGI(TAG, "http_server_ota_update_handler: Next boot partition subtype %d at offser 0x%x\r\n", boot_partition->subtype, boot_partition->address);
+            flash_successful = true;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "http_server_ota_update_handler: FLASHED ERROR!!!");
+        }
+    }
+    else
+    {
+        ESP_LOGI(TAG, "http_server_ota_update_handler: esp_ota_end ERROR!!!");
+    }
+
+    if(flash_successful)
+    {
+        http_server_monitor_send_message(HTTP_SERVER_MSG_OTA_UPDATE_SUCCESSFUL);
+    }
+    else
+    {
+        http_server_monitor_send_message(HTTP_SERVER_MSG_OTA_UPDATE_FAILED);
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t http_server_ota_status_handler(httpd_req_t *req)
+{
+
+}
+
