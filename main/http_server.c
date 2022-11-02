@@ -21,6 +21,8 @@
 #include "http_server.h"
 #include "tasks_common.h"
 #include "wifi_app.h"
+#include "esp_timer.h"
+#include "esp_system.h"
 
 static const char *TAG = "http_server";
 
@@ -31,6 +33,14 @@ static httpd_handle_t http_server_handle = NULL;
 static TaskHandle_t task_http_server_monitor = NULL;
 
 static QueueHandle_t http_server_monitor_queue_handle;
+
+const esp_timer_create_args_t fw_update_reset_args = {
+    .callback = &http_server_fw_update_reset_callback,
+    .arg = NULL,
+    .dispatch_method = ESP_TIMER_TASK,
+    .name = "fw_update_reset"
+};
+esp_timer_handle_t fw_update_reset;
 
 extern const uint8_t jquery_3_3_1_js_start[] asm("_binary_jquery_3_3_1_js_start");
 extern const uint8_t jquery_3_3_1_js_end[] asm("_binary_jquery_3_3_1_js_end");
@@ -46,6 +56,21 @@ extern const uint8_t app_js_end[] asm("_binary_app_js_end");
 
 extern const uint8_t favicon_ico_start[] asm("_binary_favicon_ico_start");
 extern const uint8_t favicon_ico_end[] asm("_binary_favicon_ico_end");
+
+static void http_server_fw_update_firmware_reset_timer(void)
+{
+    if(fw_update_status == OTA_UPDATE_SUCCESSFUL)
+    {
+        ESP_LOGI(TAG, "FW updated successful starting FW update reset timer");
+
+        ESP_ERROR_CHECK(esp_timer_create(&fw_update_reset_args, &fw_update_reset));
+        ESP_ERROR_CHECK(esp_timer_start_once(fw_update_reset, 800000));
+    }
+    else
+    {
+        ESP_LOGI(TAG, "FW update unsuccessful");
+    }
+}
 
 static void http_server_monitor(void *pvParameters)
 {
@@ -72,6 +97,7 @@ static void http_server_monitor(void *pvParameters)
             case HTTP_SERVER_MSG_OTA_UPDATE_SUCCESSFUL:
                 ESP_LOGI(TAG, "HTTP_SERVER_MSG_OTA_UPDATE_SUCCESSFUL");
                 fw_update_status = OTA_UPDATE_SUCCESSFUL;
+                http_server_fw_update_firmware_reset_timer();
                 /* code */
                 break;
             case HTTP_SERVER_MSG_OTA_UPDATE_FAILED:
@@ -200,6 +226,12 @@ BaseType_t http_server_monitor_send_message(http_server_message_t msg_id)
     return xQueueSend(http_server_monitor_queue_handle, &msg, portMAX_DELAY);
 }
 
+void http_server_fw_update_reset_callback(void *arg)
+{
+    ESP_LOGI(TAG, "Timer timed-out, restarting the device");
+    esp_restart();
+}
+
 static esp_err_t http_server_jquery_handler(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/javascript");
@@ -282,6 +314,7 @@ static esp_err_t http_server_ota_update_handler(httpd_req_t *req)
 
             //Write first part of the data
             esp_ota_write(ota_handle, body_start_p, body_part_len);
+            content_rec += body_part_len;
         }
         else
         {
@@ -325,6 +358,11 @@ static esp_err_t http_server_ota_update_handler(httpd_req_t *req)
 
 static esp_err_t http_server_ota_status_handler(httpd_req_t *req)
 {
+    char ota_json[100];
 
+    ESP_LOGI(TAG, "ota_status requested");
+    sprintf(ota_json, "{\"ota_update_status\":%d,\"compile_time\":\"%s\",\"compile_date\":\"%s\"}", fw_update_status, __TIME__, __DATE__);
+    httpd_resp_send(req, ota_json, strlen(ota_json));
+
+    return ESP_OK;
 }
-
