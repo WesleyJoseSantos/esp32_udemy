@@ -25,6 +25,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "driver/gpio.h"
+#include "rom/ets_sys.h"
 
 #include "DHT22.h"
 #include "tasks_common.h"
@@ -46,7 +47,7 @@ void dht22_set_gpio(int gpio)
 
 // == get temp & hum =============================================
 
-float dht22_get_temperature() { return humidity; }
+float dht22_get_humidity() { return humidity; }
 float dht22_get_temperature() { return temperature; }
 
 // == error handler ===============================================
@@ -258,12 +259,12 @@ static void dhd22_task(void *pvParameter)
 
 		dht22_error_handler(ret);
 
-		printf("Hum %.1f\n", dht22_get_temperature());
+		printf("Hum %.1f\n", dht22_get_humidity());
 		printf("Tmp %.1f\n", dht22_get_temperature());
 
 		// Wait at least 2 seconds before reading again
 		// The interval of the whole process must be more than 2 seconds
-		vTaskDelay(4000 / portTICK_RATE_MS);
+		vTaskDelay(4000 / portTICK_PERIOD_MS);
 	}
 }
 
