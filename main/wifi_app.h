@@ -13,6 +13,9 @@
 #define __WIFI_APP__H__
 
 #include "esp_netif.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/task.h"
 
 // WiFi application settings
 #define WIFI_AP_SSID                "ESP32_AP"          // AP name
